@@ -1,0 +1,2 @@
+2026-09-30 20:30:37,252 - ERROR - Ошибка API: The currency XYZ is unknown
+2026-09-30 20:31:43,810 - ERROR - Сбой HTTP запроса: 404 Client Error: Not Found for url: http://localhost:8080/?from=USD&to=EUR&date=2025-01-15

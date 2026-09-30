@@ -41,7 +41,7 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     root_dir = os.path.dirname(script_dir)
     
-    setup_logging(root_dir)
+    setup_logging(script_dir)
 
     # Локальная проверка формата даты перед отправкой запроса
     try:
@@ -77,7 +77,7 @@ def main():
             sys.exit(1)
             
         # Создаем папку data в корне проекта, если она не существует
-        data_dir = os.path.join(root_dir, 'data')
+        data_dir = os.path.join(script_dir, 'data')
         os.makedirs(data_dir, exist_ok=True)
         
         # Сохранение JSON файла
