@@ -1,0 +1,7 @@
+# Ежедневно в 6:00 утра - курс MDL к EUR за вчерашний день
+0 6 * * * root cd /app && python3 currency_exchange_rate.py --from_curr MDL --to_curr EUR --date $(date -d "yesterday" +\%Y-\%m-\%d) --key "${API_KEY}" --url "${API_URL}" >> /var/log/cron.log 2>&1
+
+# Еженедельно в пятницу в 17:00 (5:00 PM) - курс MDL к USD за прошлую неделю (7 дней назад)
+0 17 * * 5 root cd /app && python3 currency_exchange_rate.py --from_curr MDL --to_curr USD --date $(date -d "1 week ago" +\%Y-\%m-\%d) --key "${API_KEY}" --url "${API_URL}" >> /var/log/cron.log 2>&1
+
+# (Обязательно оставь пустую строку в конце этого файла!)
