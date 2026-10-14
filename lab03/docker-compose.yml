@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  cron_worker:
+    build: .
+    container_name: lab03_cron_worker
+    environment:
+      # Замени на свой реальный API ключ от сервера
+      - API_KEY=EXAMPLE_API_KEY
+      # host.docker.internal позволяет контейнеру достучаться до API, запущенного на твоем ПК
+      - API_URL=http://host.docker.internal:8080/
+      - TZ=Europe/Chisinau
+    volumes:
+      # Монтируем папку data, чтобы видеть сохраненные JSON-файлы снаружи
+      - ./data:/app/data
+    restart: unless-stopped
