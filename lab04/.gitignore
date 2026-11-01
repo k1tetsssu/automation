@@ -1,0 +1,28 @@
+# Секретные ключи и SSH-доступ
+/secrets/
+*.pem
+*.key
+id_rsa*
+
+# Файлы окружения с чувствительными данными
+.env
+.env.local
+.env.*.local
+
+# Конфигурационные файлы с чувствительными данными
+/site/config.php
+/config.php
+
+# Локальные базы данных SQLite, создаваемые при тестах
+*.db
+*.sqlite
+*.sqlite3
+
+# Временные файлы и бэкапы, создаваемые Jenkins-пайплайном
+.jenkins-original-config.php
+init_db.php
+
+# Системные файлы и зависимости (если используется Composer)
+/vendor/
+.DS_Store
+Thumbs.db
