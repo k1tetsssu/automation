@@ -1,0 +1,17 @@
+FROM ubuntu:22.04
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    openssh-server \
+    sudo \
+    && rm -rf /var/lib/apt/lists/*
+
+# Создаем пользователя ansible для управления через Ansible
+RUN useradd -rm -d /home/ansible -s /bin/bash -g root -G sudo -u 1000 ansible
+RUN echo 'ansible:ansible' | chpasswd
+
+# Настройка SSH
+RUN mkdir /var/run/sshd
+RUN mkdir -p /home/ansible/.ssh
+RUN chmod 700 /home/ansible/.ssh
+
+EXPOSE 22
+CMD ["/usr/sbin/sshd", "-D"]
