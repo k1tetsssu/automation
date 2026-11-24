@@ -23,69 +23,147 @@ pipeline {
             }
         }
 
-        stage('Install Dependencies') {
+        stage('Environment Check') {
             steps {
-                echo 'Installing Composer dependencies if present...'
+                echo 'Checking PHP environment...'
                 dir("${PHP_APP_DIR}") {
                     sh '''
                         set -eu
+
+                        php -v
+
+                        echo "Checking PDO SQLite..."
+
+                        php -r '
+                            if (!in_array("sqlite", PDO::getAvailableDrivers())) {
+                                fwrite(STDERR, "PDO SQLite is not installed!\\n");
+                                exit(1);
+                            }
+
+                            echo "PDO SQLite is available.\\n";
+                        '
+
+                        echo "Environment check completed."
+                    '''
+                }
+            }
+        }
+
+        stage('Prepare Test Database') {
+            steps {
+                echo 'Preparing test environment...'
+                dir("${PHP_APP_DIR}") {
+                    sh '''
+                        set -eu
+
+                        echo "Checking project files..."
+
+                        test -f site/config.php
+                        test -f site/modules/database.php
+                        test -f sql/schema.sql
+                        test -f tests/tests.php
+
+                        echo "Saving original configuration..."
+
+                        git show HEAD:site/config.php > .jenkins-original-config.php
+
+                        echo "Removing old test database..."
+
+                        rm -f test_database.db
+
+                        echo "Creating test configuration..."
+
+                        printf '%s\\n' \
+                            '<?php' \
+                            '$config = [' \
+                            '    "db" => [' \
+                            '        "path" => __DIR__ . "/../test_database.db"' \
+                            '    ]' \
+                            '];' \
+                            > site/config.php
+
+                        echo "Checking PHP syntax..."
+
+                        php -l site/config.php
+
+                        echo "Initializing SQLite database..."
+
+                        php -r '
+                            $path = __DIR__ . "/test_database.db";
+
+                            $pdo = new PDO("sqlite:" . $path);
+                            $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+                            $schema = file_get_contents(__DIR__ . "/sql/schema.sql");
+
+                            if ($schema === false) {
+                                throw new RuntimeException("Cannot read schema.sql");
+                            }
+
+                            $pdo->exec($schema);
+
+                            echo "Database schema imported successfully!\\n";
+                        '
+
+                        echo "Verifying database..."
+
+                        test -f test_database.db
+
+                        ls -lh test_database.db
+
+                        echo "Test database is ready."
+                    '''
+                }
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                echo 'Checking project dependencies...'
+                dir("${PHP_APP_DIR}") {
+                    sh '''
                         if [ -f composer.json ]; then
-                            composer install --no-interaction --prefer-dist
+                            composer install --no-interaction
                         else
-                            echo "No composer.json found; skipping composer install."
+                            echo "No Composer dependencies found."
                         fi
                     '''
                 }
             }
         }
 
-        stage('Run Unit Tests') {
+        stage('Run Tests') {
             steps {
-                echo 'Preparing test database and running PHP unit tests...'
+                echo 'Running application tests...'
                 dir("${PHP_APP_DIR}") {
                     sh '''
                         set -eu
 
-                        if [ -f site/config.php ]; then
-                            cp site/config.php .jenkins-original-config.php
+                        echo "Checking test files..."
+
+                        php -l tests/testframework.php
+                        php -l tests/tests.php
+
+                        echo "Executing tests..."
+
+                        set +e
+                        test_output=$(php tests/tests.php 2>&1)
+                        test_status=$?
+                        set -e
+
+                        printf '%s\\n' "$test_output"
+
+                        if [ "$test_status" -ne 0 ]; then
+                            echo "PHP tests execution failed!"
+                            exit "$test_status"
                         fi
 
-                        rm -f test_database.db
-
-                        if [ -f site/config.php ]; then
-                            printf '%s\n' \
-                                '<?php' \
-                                '$config = [' \
-                                '    "db" => [' \
-                                '        "path" => __DIR__ . "/test_database.db"' \
-                                '    ]' \
-                                '];' \
-                                > site/config.php
-                            php -l site/config.php
-                        fi
-
-                        if [ -f sql/schema.sql ]; then
-                            php -r '
-                                $path = __DIR__ . "/test_database.db";
-                                $pdo = new PDO("sqlite:" . $path);
-                                $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-                                $schema = file_get_contents(__DIR__ . "/sql/schema.sql");
-                                if ($schema === false) {
-                                    throw new RuntimeException("Cannot read sql/schema.sql");
-                                }
-                                $pdo->exec($schema);
-                                echo "Test SQLite database initialized.\n";
-                            '
-                        fi
-
-                        if [ -x vendor/bin/phpunit ]; then
-                            vendor/bin/phpunit
-                        elif [ -f tests/tests.php ]; then
-                            php tests/tests.php
-                        else
-                            echo "No PHPUnit or tests/tests.php found!"
+                        if ! printf '%s\\n' "$test_output" | grep -Eq '7[[:space:]]*/[[:space:]]*7'; then
+                            echo "Not all tests passed!"
                             exit 1
                         fi
+
+                        echo "All 7 tests passed successfully!"
                     '''
                 }
             }
@@ -93,32 +171,34 @@ pipeline {
 
         stage('Report Test Results') {
             steps {
-                echo 'Reporting test execution status...'
-                sh '''
-                    set -eu
-                    echo "PHP build and unit test stage finished successfully on agent: ${NODE_NAME}"
-                '''
+                echo 'Unit tests completed and verified (7 / 7).'
             }
         }
     }
 
     post {
         always {
+            echo 'Cleaning up test environment...'
             dir("${PHP_APP_DIR}") {
                 sh '''
                     if [ -f .jenkins-original-config.php ]; then
                         mv .jenkins-original-config.php site/config.php
+                        echo "Original configuration restored."
                     fi
+
                     rm -f test_database.db
                 '''
             }
             cleanWs()
+            echo 'Pipeline finished.'
         }
+
         success {
-            echo 'PHP build and unit tests succeeded!'
+            echo 'All tests passed! Pipeline completed successfully.'
         }
+
         failure {
-            echo 'PHP build or unit tests failed. Check console log.'
+            echo 'Pipeline failed. Check the logs above.'
         }
     }
 }
