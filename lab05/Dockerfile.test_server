@@ -4,7 +4,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Europe/Chisinau
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    openssh-server \
+    openssh-server \ 
+    python3 \
     sudo \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
