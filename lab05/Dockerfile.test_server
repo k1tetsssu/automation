@@ -1,0 +1,28 @@
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Europe/Chisinau
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    openssh-server \ 
+    python3 \
+    sudo \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd -rm -d /home/ansible -s /bin/bash -g root -G sudo -u 1000 ansible \
+    && echo 'ansible:ansible' | chpasswd \
+    && echo "ansible ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/ansible \
+    && chmod 0440 /etc/sudoers.d/ansible
+
+ARG TEST_SERVER_ANSIBLE_PUBKEY
+RUN mkdir -p /var/run/sshd /home/ansible/.ssh \
+    && echo "${TEST_SERVER_ANSIBLE_PUBKEY}" > /home/ansible/.ssh/authorized_keys \
+    && chmod 700 /home/ansible/.ssh \
+    && chmod 600 /home/ansible/.ssh/authorized_keys \
+    && chown -R ansible:root /home/ansible
+
+RUN sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+
+EXPOSE 22
+CMD ["/usr/sbin/sshd", "-D"]
