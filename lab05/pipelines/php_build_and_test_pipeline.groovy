@@ -7,46 +7,63 @@ pipeline {
         timestamps()
     }
 
+    environment {
+        PHP_REPO_URL = 'https://github.com/k1tetsssu/containers08'
+        PHP_REPO_BRANCH = 'main'
+        PHP_APP_DIR = 'php-app'
+    }
+
     stages {
-        stage('Checkout') {
+        stage('Clone Repository') {
             steps {
-                // Получаем код из репозитория
-                checkout scm
+                echo "Cloning PHP project from ${PHP_REPO_URL} (${PHP_REPO_BRANCH})..."
+                dir("${PHP_APP_DIR}") {
+                    git branch: "${PHP_REPO_BRANCH}", url: "${PHP_REPO_URL}"
+                }
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                echo 'Установка зависимостей проекта...'
-                sh '''
-                    if [ -f composer.json ]; then
-                        composer install --no-interaction --prefer-dist
-                    else
-                        echo "Файл composer.json не найден, пропускаем установку зависимостей."
-                    fi
-                '''
+                echo 'Installing Composer dependencies if present...'
+                dir("${PHP_APP_DIR}") {
+                    sh '''
+                        set -eu
+                        if [ -f composer.json ]; then
+                            composer install --no-interaction --prefer-dist
+                        else
+                            echo "No composer.json found; skipping composer install."
+                        fi
+                    '''
+                }
             }
         }
 
         stage('Run Unit Tests') {
             steps {
-                echo 'Запуск тестов...'
+                echo 'Running PHP unit tests...'
+                dir("${PHP_APP_DIR}") {
+                    sh '''
+                        set -eu
+                        if [ -x vendor/bin/phpunit ]; then
+                            vendor/bin/phpunit
+                        elif [ -f tests/tests.php ]; then
+                            php tests/tests.php
+                        else
+                            echo "No PHPUnit or tests/tests.php found!"
+                            exit 1
+                        fi
+                    '''
+                }
+            }
+        }
+
+        stage('Report Test Results') {
+            steps {
+                echo 'Reporting test execution status...'
                 sh '''
                     set -eu
-                    
-                    # Если используется PHPUnit (как указано в задании)
-                    if [ -f vendor/bin/phpunit ]; then
-                        echo "Запуск PHPUnit..."
-                        vendor/bin/phpunit --log-junit results.xml
-                    
-                    # Если используется кастомный фреймворк из 4-й лабораторной
-                    elif [ -f tests/tests.php ]; then
-                        echo "PHPUnit не найден. Запуск кастомных тестов..."
-                        php tests/tests.php
-                    else
-                        echo "Тесты не найдены!"
-                        exit 1
-                    fi
+                    echo "PHP build and unit test stage finished successfully on agent: ${NODE_NAME}"
                 '''
             }
         }
@@ -54,16 +71,13 @@ pipeline {
 
     post {
         always {
-            // Если PHPUnit сгенерировал XML-отчет, Jenkins его распарсит
-            junit testResults: 'results.xml', allowEmptyResults: true
-            echo 'Очистка рабочего пространства...'
             cleanWs()
         }
         success {
-            echo 'Сборка и тесты успешно завершены!'
+            echo 'PHP build and unit tests succeeded!'
         }
         failure {
-            echo 'Ошибка при сборке или выполнении тестов.'
+            echo 'PHP build or unit tests failed. Check console log.'
         }
     }
 }

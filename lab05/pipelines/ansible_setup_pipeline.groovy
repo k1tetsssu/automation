@@ -7,33 +7,42 @@ pipeline {
         timestamps()
     }
 
-    environment {
-        // Отключаем интерактивный запрос на подтверждение SSH fingerprint
-        ANSIBLE_HOST_KEY_CHECKING = 'False'
-    }
-
     stages {
-        stage('Checkout') {
+        stage('Clone Repository') {
             steps {
+                echo 'Cloning automation repository with Ansible playbook...'
                 checkout scm
             }
         }
 
-        stage('Configure Test Server') {
+        stage('Run Ansible Playbook') {
             steps {
-                echo 'Запуск Ansible Playbook для настройки сервера...'
-                // Запускаем плейбук, используя инвентарь из папки ansible/
-                sh 'ansible-playbook -i ansible/hosts.ini ansible/setup_test_server.yml'
+                echo 'Running setup_test_server.yml against test-server...'
+                withCredentials([sshUserPrivateKey(credentialsId: 'test-server-ssh-key', keyFileVariable: 'TEST_SERVER_KEY', usernameVariable: 'SSH_USER')]) {
+                    sh '''
+                        set -eu
+                        mkdir -p /home/jenkins/.ssh
+                        cp "$TEST_SERVER_KEY" /home/jenkins/.ssh/test_server_ssh_key
+                        chmod 600 /home/jenkins/.ssh/test_server_ssh_key
+                        chown -R jenkins:jenkins /home/jenkins/.ssh
+
+                        ansible-playbook -i lab05/ansible/hosts.ini lab05/ansible/setup_test_server.yml
+                    '''
+                }
             }
         }
     }
 
     post {
+        always {
+            sh 'rm -f /home/jenkins/.ssh/test_server_ssh_key'
+            cleanWs()
+        }
         success {
-            echo 'Тестовый сервер успешно сконфигурирован!'
+            echo 'Test server configured with Apache2 and PHP successfully!'
         }
         failure {
-            echo 'Произошла ошибка при настройке тестового сервера.'
+            echo 'Ansible test server configuration failed.'
         }
     }
 }

@@ -1,17 +1,27 @@
 FROM ubuntu:22.04
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Europe/Chisinau
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
     openssh-server \
     sudo \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Создаем пользователя ansible для управления через Ansible
-RUN useradd -rm -d /home/ansible -s /bin/bash -g root -G sudo -u 1000 ansible
-RUN echo 'ansible:ansible' | chpasswd
+RUN useradd -rm -d /home/ansible -s /bin/bash -g root -G sudo -u 1000 ansible \
+    && echo 'ansible:ansible' | chpasswd \
+    && echo "ansible ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/ansible \
+    && chmod 0440 /etc/sudoers.d/ansible
 
-# Настройка SSH
-RUN mkdir /var/run/sshd
-RUN mkdir -p /home/ansible/.ssh
-RUN chmod 700 /home/ansible/.ssh
+ARG TEST_SERVER_ANSIBLE_PUBKEY
+RUN mkdir -p /var/run/sshd /home/ansible/.ssh \
+    && echo "${TEST_SERVER_ANSIBLE_PUBKEY}" > /home/ansible/.ssh/authorized_keys \
+    && chmod 700 /home/ansible/.ssh \
+    && chmod 600 /home/ansible/.ssh/authorized_keys \
+    && chown -R ansible:root /home/ansible
+
+RUN sed -i 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/' /etc/ssh/sshd_config
 
 EXPOSE 22
 CMD ["/usr/sbin/sshd", "-D"]
